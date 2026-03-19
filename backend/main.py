@@ -6,6 +6,7 @@ from database import SessionLocal, engine, Base
 from models import Incident
 from schemas import IncidentOut
 from utils import parse_logs, detect_suspicious_events
+from inference import predict_anomalies
 
 Base.metadata.create_all(bind=engine)
 
@@ -40,10 +41,42 @@ async def upload_logs(file: UploadFile = File(...), db: Session = Depends(get_db
 
     events = parse_logs(text)
     incidents = detect_suspicious_events(events)
+    ai_results = predict_anomalies(events)
 
     created = []
-    for item in incidents:
-        incident = Incident(**item)
+
+    for i, item in enumerate(incidents):
+        ai_data = ai_results[i] if i < len(ai_results) else {}
+
+        existing_incident = (
+            db.query(Incident)
+            .filter(
+                Incident.source_ip == item.get("source_ip"),
+                Incident.destination_ip == item.get("destination_ip"),
+                Incident.timestamp == item.get("timestamp"),
+                Incident.alert_type == item.get("alert_type"),
+            )
+            .first()
+        )
+
+        if existing_incident:
+            continue
+
+        incident = Incident(
+            source_ip=item.get("source_ip"),
+            destination_ip=item.get("destination_ip"),
+            domain=item.get("domain"),
+            timestamp=item.get("timestamp"),
+            alert_type=item.get("alert_type"),
+            summary=item.get("summary"),
+            risk_level=item.get("risk_level"),
+            recommended_action=item.get("recommended_action"),
+            status=item.get("status", "Pending"),
+            ai_prediction=ai_data.get("ai_prediction"),
+            ai_score=ai_data.get("ai_score"),
+            ai_reason=ai_data.get("ai_reason"),
+        )
+
         db.add(incident)
         db.commit()
         db.refresh(incident)

@@ -3,15 +3,18 @@ from pydantic import BaseModel
 
 
 class IncidentBase(BaseModel):
-    source_ip: str
-    destination_ip: str
+    source_ip: Optional[str] = None
+    destination_ip: Optional[str] = None
     domain: Optional[str] = None
-    timestamp: str
-    alert_type: str
-    summary: str
-    risk_level: str
-    recommended_action: str
-    status: str
+    timestamp: Optional[str] = None
+    alert_type: Optional[str] = None
+    summary: Optional[str] = None
+    risk_level: Optional[str] = None
+    recommended_action: Optional[str] = None
+    status: Optional[str] = None
+    ai_prediction: Optional[str] = None
+    ai_score: Optional[float] = None
+    ai_reason: Optional[str] = None
 
 
 class IncidentOut(IncidentBase):

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, Float
 from database import Base
 
 
@@ -15,3 +15,7 @@ class Incident(Base):
     risk_level = Column(String)
     recommended_action = Column(String)
     status = Column(String, default="Pending")
+
+    ai_prediction = Column(String, nullable=True)
+    ai_score = Column(Float, nullable=True)
+    ai_reason = Column(Text, nullable=True)
