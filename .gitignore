@@ -1,22 +1,38 @@
-node_modules/
+# Environment secrets
 .env
-dist/
+backend/.env
 
-# Documentation - not for deployment
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+build/
+dist/
+frontend/build/
+
+# Documentation files (not for deployment)
 *.md
+!README.md
 *.docx
 *.pdf
 ~$*.docx
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
+# Claude / AI internal tools
+AI/
+.claude/
+.claire/
+.qodo/
 
-# Build artifacts
-build/
-
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
@@ -24,14 +40,18 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+*.swo
 
 # Logs
 *.log
 logs/
 
-# Backups
+# Database backups
 db_backup/
 *.sql.gz
+
+# ML models (large binary)
+backend/saved_models/*.pkl
 
 # Temp
 *.tmp

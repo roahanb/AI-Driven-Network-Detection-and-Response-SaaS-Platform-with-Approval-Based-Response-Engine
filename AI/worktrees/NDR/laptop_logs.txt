@@ -1,6 +1,0 @@
-2026-03-09T10:00:00,192.168.1.8,142.250.183.14,google.com,DNS Query
-2026-03-09T10:00:05,192.168.1.8,185.199.111.1,github.com,HTTP Request
-2026-03-09T10:00:10,192.168.1.8,1.1.1.1,cloudflare.com,DNS Query
-2026-03-09T10:00:15,192.168.1.8,185.199.111.1,malicious-site.com,HTTP Alert
-2026-03-09T10:00:20,192.168.1.8,185.199.111.1,malicious-site.com,HTTP Alert
-2026-03-09T10:00:25,192.168.1.8,185.199.111.1,malicious-site.com,HTTP Alert
