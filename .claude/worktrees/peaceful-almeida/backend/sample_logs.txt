@@ -1,0 +1,10 @@
+{"timestamp":"2026-03-20T10:00:00Z","src_ip":"192.168.1.10","dest_ip":"8.8.8.8","domain":"google.com","event_type":"dns"}
+{"timestamp":"2026-03-20T10:00:05Z","src_ip":"192.168.1.10","dest_ip":"1.1.1.1","domain":"malicious-login.com","event_type":"dns"}
+{"timestamp":"2026-03-20T10:00:10Z","src_ip":"192.168.1.10","dest_ip":"9.9.9.9","domain":"malicious-update.com","event_type":"dns"}
+{"timestamp":"2026-03-20T10:00:15Z","src_ip":"192.168.1.15","dest_ip":"8.8.4.4","domain":"yahoo.com","event_type":"dns"}
+{"timestamp":"2026-03-20T10:00:20Z","src_ip":"192.168.1.20","dest_ip":"192.168.1.100","domain":"","alert":{"signature":"suspicious_port_scan"}}
+{"timestamp":"2026-03-20T10:00:25Z","src_ip":"192.168.1.20","dest_ip":"192.168.1.101","domain":"","alert":{"signature":"suspicious_port_scan"}}
+{"timestamp":"2026-03-20T10:00:30Z","src_ip":"192.168.1.20","dest_ip":"192.168.1.102","domain":"","alert":{"signature":"suspicious_port_scan"}}
+{"timestamp":"2026-03-20T10:00:35Z","src_ip":"192.168.1.30","dest_ip":"172.16.0.5","domain":"internal-app.local","event_type":"http"}
+{"timestamp":"2026-03-20T10:00:40Z","src_ip":"192.168.1.30","dest_ip":"172.16.0.5","domain":"internal-app.local","event_type":"http"}
+{"timestamp":"2026-03-20T10:00:45Z","src_ip":"192.168.1.99","dest_ip":"45.33.32.156","domain":"malicious-c2.net","alert":{"signature":"suspicious_dns_tunnel"}}

@@ -1,12 +1,19 @@
+import logging
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import SessionLocal, engine, Base
 from models import Incident
 from schemas import IncidentOut
 from utils import parse_logs, detect_suspicious_events
 from inference import predict_anomalies
+from mitre import map_to_mitre
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
@@ -34,58 +41,162 @@ def root():
     return {"message": "Backend is running"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
 @app.post("/upload-logs")
 async def upload_logs(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    content = await file.read()
-    text = content.decode("utf-8")
+    """
+    Upload and process network logs in JSON, CSV, or plain text format.
+    Detects suspicious events and runs ML-based anomaly detection.
+    """
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(400, "File must have a name")
 
-    events = parse_logs(text)
-    incidents = detect_suspicious_events(events)
-    ai_results = predict_anomalies(events)
+        logger.info(f"Processing file: {file.filename}")
 
-    created = []
+        # Read and decode file
+        try:
+            content = await file.read()
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.error(f"File {file.filename} is not UTF-8 encoded")
+            raise HTTPException(400, "File must be UTF-8 encoded")
+        except Exception as e:
+            logger.error(f"Error reading file: {str(e)}")
+            raise HTTPException(400, "Failed to read file")
 
-    for i, item in enumerate(incidents):
-        ai_data = ai_results[i] if i < len(ai_results) else {}
+        if not text.strip():
+            raise HTTPException(400, "File is empty")
 
-        existing_incident = (
-            db.query(Incident)
-            .filter(
-                Incident.source_ip == item.get("source_ip"),
-                Incident.destination_ip == item.get("destination_ip"),
-                Incident.timestamp == item.get("timestamp"),
-                Incident.alert_type == item.get("alert_type"),
-            )
-            .first()
-        )
+        # Parse logs
+        try:
+            events = parse_logs(text)
+            logger.info(f"Parsed {len(events)} events from {file.filename}")
+        except Exception as e:
+            logger.error(f"Error parsing logs: {str(e)}")
+            raise HTTPException(400, f"Failed to parse logs: {str(e)}")
 
-        if existing_incident:
-            continue
+        if not events:
+            return {
+                "message": "No valid events found in file",
+                "incidents_found": 0,
+            }
 
-        incident = Incident(
-            source_ip=item.get("source_ip"),
-            destination_ip=item.get("destination_ip"),
-            domain=item.get("domain"),
-            timestamp=item.get("timestamp"),
-            alert_type=item.get("alert_type"),
-            summary=item.get("summary"),
-            risk_level=item.get("risk_level"),
-            recommended_action=item.get("recommended_action"),
-            status=item.get("status", "Pending"),
-            ai_prediction=ai_data.get("ai_prediction"),
-            ai_score=ai_data.get("ai_score"),
-            ai_reason=ai_data.get("ai_reason"),
-        )
+        # Detect suspicious events and run ML prediction
+        try:
+            incidents = detect_suspicious_events(events)
+            ai_results = predict_anomalies(events)
+            logger.info(f"Detected {len(incidents)} suspicious incidents, {len(ai_results)} AI predictions")
+        except Exception as e:
+            logger.error(f"Error in detection/ML: {str(e)}")
+            raise HTTPException(500, f"Detection failed: {str(e)}")
 
-        db.add(incident)
-        db.commit()
-        db.refresh(incident)
-        created.append(incident)
+        # Create incident records in database
+        created = []
+        skipped = 0
 
-    return {
-        "message": "Logs processed successfully",
-        "incidents_found": len(created),
-    }
+        try:
+            for incident_item in incidents:
+                # Find matching AI prediction for this incident
+                # Match by finding the event with same source/dest IPs
+                ai_data = {}
+                source_ip = incident_item.get("source_ip")
+                dest_ip = incident_item.get("destination_ip")
+
+                for event_idx, event in enumerate(events):
+                    if (event.get("source_ip") == source_ip and
+                        event.get("destination_ip") == dest_ip):
+                        if event_idx < len(ai_results):
+                            ai_data = ai_results[event_idx]
+                        break
+
+                # Check if incident already exists
+                existing_incident = (
+                    db.query(Incident)
+                    .filter(
+                        Incident.source_ip == source_ip,
+                        Incident.destination_ip == dest_ip,
+                        Incident.timestamp == incident_item.get("timestamp"),
+                        Incident.alert_type == incident_item.get("alert_type"),
+                    )
+                    .first()
+                )
+
+                if existing_incident:
+                    skipped += 1
+                    continue
+
+                # Map to MITRE ATT&CK framework
+                mitre_result = map_to_mitre(
+                    alert_type=incident_item.get("alert_type", ""),
+                    domain=incident_item.get("domain", ""),
+                    ai_reason=ai_data.get("ai_reason", ""),
+                    summary=incident_item.get("summary", ""),
+                )
+
+                # Create new incident
+                incident = Incident(
+                    source_ip=source_ip,
+                    destination_ip=dest_ip,
+                    domain=incident_item.get("domain"),
+                    timestamp=incident_item.get("timestamp"),
+                    alert_type=incident_item.get("alert_type"),
+                    summary=incident_item.get("summary"),
+                    risk_level=incident_item.get("risk_level"),
+                    recommended_action=incident_item.get("recommended_action"),
+                    status=incident_item.get("status", "Pending"),
+                    ai_prediction=ai_data.get("ai_prediction"),
+                    ai_score=ai_data.get("ai_score"),
+                    ai_reason=ai_data.get("ai_reason"),
+                )
+
+                # Add MITRE ATT&CK mapping if found
+                if mitre_result:
+                    tactic_id, tactic_name, technique_id, technique_name = mitre_result
+                    incident.mitre_tactic_id = tactic_id
+                    incident.mitre_tactic = tactic_name
+                    incident.mitre_technique_id = technique_id
+                    incident.mitre_technique = technique_name
+                    logger.debug(f"Mapped incident to MITRE {tactic_id}/{technique_id}")
+
+                db.add(incident)
+
+            # Commit all changes at once
+            db.commit()
+
+            # Refresh created incidents
+            for incident in db.query(Incident).filter(
+                Incident.status == "Pending"
+            ).order_by(Incident.id.desc()).limit(len(incidents)).all():
+                created.append(incident)
+
+            logger.info(f"Created {len(created)} incidents, skipped {skipped} duplicates")
+
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error: {str(e)}")
+            raise HTTPException(500, "Database error while saving incidents")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Unexpected error creating incidents: {str(e)}")
+            raise HTTPException(500, f"Error saving incidents: {str(e)}")
+
+        return {
+            "message": "Logs processed successfully",
+            "incidents_found": len(created),
+            "duplicates_skipped": skipped,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in upload_logs: {str(e)}")
+        raise HTTPException(500, "Internal server error")
 
 
 @app.get("/incidents", response_model=list[IncidentOut])

@@ -1,0 +1,15 @@
+node_modules/
+.env
+dist/
+*.pyc
+__pycache__/
+*.pkl
+*.db
+.DS_Store
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+postgres_data/
+redis_data/
+model_data/
