@@ -15,6 +15,11 @@ class IncidentBase(BaseModel):
     ai_prediction: Optional[str] = None
     ai_score: Optional[float] = None
     ai_reason: Optional[str] = None
+    # ML Ensemble fields (paper Section 4.2 + ABRE 4.3)
+    attack_category: Optional[str] = None
+    threat_score: Optional[float] = None
+    risk_tier: Optional[int] = None
+    # MITRE ATT&CK
     mitre_tactic_id: Optional[str] = None
     mitre_tactic: Optional[str] = None
     mitre_technique_id: Optional[str] = None

@@ -277,6 +277,10 @@ async def upload_logs(
                     ai_prediction=ai_data.get("ai_prediction"),
                     ai_score=ai_data.get("ai_score"),
                     ai_reason=ai_data.get("ai_reason"),
+                    # ML ensemble fields (paper Section 4.2 + ABRE 4.3)
+                    attack_category=ai_data.get("attack_category"),
+                    threat_score=ai_data.get("threat_score"),
+                    risk_tier=ai_data.get("risk_tier"),
                 )
 
                 # Add MITRE ATT&CK mapping if found
@@ -311,9 +315,12 @@ async def upload_logs(
                             "destination_ip": incident.destination_ip,
                             "alert_type": incident.alert_type,
                             "risk_level": incident.risk_level,
-                            "timestamp": incident.timestamp.isoformat() if incident.timestamp else None,
+                            "timestamp": str(incident.timestamp) if incident.timestamp else None,
                             "mitre_tactic": incident.mitre_tactic,
                             "mitre_technique": incident.mitre_technique,
+                            "attack_category": incident.attack_category,
+                            "threat_score": incident.threat_score,
+                            "risk_tier": incident.risk_tier,
                         }
                     )
                 )

@@ -47,6 +47,11 @@ class Incident(Base):
     ai_score = Column(Float, nullable=True)
     ai_reason = Column(Text, nullable=True)
 
+    # ML Ensemble — Paper Section 4.2 + ABRE Section 4.3
+    attack_category = Column(String, nullable=True)      # e.g. "DDoS", "PortScan"
+    threat_score    = Column(Float, nullable=True)       # [0.0, 1.0]
+    risk_tier       = Column(Integer, nullable=True)     # 1, 2, or 3 (ABRE)
+
     # MITRE ATT&CK Framework
     mitre_tactic_id = Column(String, nullable=True, index=True)
     mitre_tactic = Column(String, nullable=True)

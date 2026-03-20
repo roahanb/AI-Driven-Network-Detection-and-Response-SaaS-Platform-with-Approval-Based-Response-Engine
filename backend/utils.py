@@ -415,7 +415,11 @@ def detect_suspicious_events(events: list) -> list:
 
         reasons = []
 
-        if any(k in alert for k in ["scan", "exploit", "attack", "malware", "brute", "injection", "flood", "dos"]):
+        if any(k in alert for k in [
+            "scan", "exploit", "attack", "malware", "brute", "injection",
+            "flood", "dos", "ddos", "ransomware", "exfil", "beacon",
+            "c2", "heartbleed", "infiltrat", "patator", "bot",
+        ]):
             reasons.append(f"Suspicious alert type: {alert_type}")
 
         if ip_counts[src_ip] >= 3:
@@ -426,10 +430,12 @@ def detect_suspicious_events(events: list) -> list:
 
         if reasons:
             # Determine risk level
-            if "malicious" in domain or "malware" in domain or "botnet" in domain or "trojan" in domain:
+            if any(k in alert for k in ["ransomware", "heartbleed", "exploit", "c2", "exfil"]) or \
+               any(k in domain for k in ["malicious", "malware", "botnet", "trojan", "ransomware"]):
                 risk_level = "High"
                 recommended_action = "Block IP and isolate affected host"
-            elif "scan" in alert or "brute" in alert or ip_counts[src_ip] >= 3:
+            elif "scan" in alert or "brute" in alert or "beacon" in alert or \
+                 "ddos" in alert or "flood" in alert or ip_counts[src_ip] >= 3:
                 risk_level = "Medium"
                 recommended_action = "Investigate source host and monitor traffic"
             else:

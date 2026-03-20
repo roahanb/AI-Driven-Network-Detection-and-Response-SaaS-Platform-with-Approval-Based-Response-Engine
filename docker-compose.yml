@@ -35,6 +35,7 @@ services:
       retries: 5
 
   backend:
+    platform: linux/amd64
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -47,8 +48,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       DEBUG: "false"
       ENVIRONMENT: production
-    volumes:
-      - model_data:/app/saved_models
     ports:
       - "8000:8000"
     depends_on:
@@ -82,7 +81,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  model_data:
 
 networks:
   default:
