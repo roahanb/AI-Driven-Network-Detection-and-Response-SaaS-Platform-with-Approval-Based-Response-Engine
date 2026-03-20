@@ -15,10 +15,6 @@ class IncidentBase(BaseModel):
     ai_prediction: Optional[str] = None
     ai_score: Optional[float] = None
     ai_reason: Optional[str] = None
-    mitre_tactic_id: Optional[str] = None
-    mitre_tactic: Optional[str] = None
-    mitre_technique_id: Optional[str] = None
-    mitre_technique: Optional[str] = None
 
 
 class IncidentOut(IncidentBase):

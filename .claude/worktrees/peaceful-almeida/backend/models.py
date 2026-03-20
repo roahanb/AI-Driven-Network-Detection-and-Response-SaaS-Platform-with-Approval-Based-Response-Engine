@@ -19,9 +19,3 @@ class Incident(Base):
     ai_prediction = Column(String, nullable=True)
     ai_score = Column(Float, nullable=True)
     ai_reason = Column(Text, nullable=True)
-
-    # MITRE ATT&CK Framework
-    mitre_tactic_id = Column(String, nullable=True, index=True)
-    mitre_tactic = Column(String, nullable=True)
-    mitre_technique_id = Column(String, nullable=True, index=True)
-    mitre_technique = Column(String, nullable=True)
