@@ -34,15 +34,8 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://0.0.0.0:3000",
-        "https://roahacks.com",
-        "http://roahacks.com",
-        "https://www.roahacks.com",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],  # nginx handles origin restriction in production
+    allow_credentials=False,  # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
