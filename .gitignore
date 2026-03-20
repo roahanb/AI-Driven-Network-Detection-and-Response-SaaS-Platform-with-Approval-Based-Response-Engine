@@ -7,11 +7,10 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.Python
 
-# Node
+# Node — IMPORTANT: exclude from all subdirs
 node_modules/
+**/node_modules/
 npm-debug.log*
 
 # Build artifacts
@@ -19,14 +18,13 @@ build/
 dist/
 frontend/build/
 
-# Documentation files (not for deployment)
+# Documentation (not for deployment)
 *.md
 !README.md
 *.docx
 *.pdf
-~$*.docx
 
-# Claude / AI internal tools
+# Claude / AI tools
 AI/
 .claude/
 .claire/
@@ -37,20 +35,19 @@ AI/
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 *.swp
-*.swo
 
 # Logs
 *.log
 logs/
 
-# Database backups
+# Database
+*.db
+*.sqlite
 db_backup/
-*.sql.gz
 
-# ML models (large binary)
+# ML models
 backend/saved_models/*.pkl
 
 # Temp
