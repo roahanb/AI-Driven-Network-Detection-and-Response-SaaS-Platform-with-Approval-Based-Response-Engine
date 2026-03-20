@@ -53,3 +53,4 @@ backend/saved_models/*.pkl
 # Temp
 *.tmp
 *.bak
+backend/saved_models/*.keras
