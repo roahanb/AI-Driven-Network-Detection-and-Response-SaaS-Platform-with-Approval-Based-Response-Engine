@@ -1,10 +1,12 @@
 import logging
 import os
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header
+import time
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional
+from datetime import datetime
 
 from database import SessionLocal, engine, Base
 from models import Incident, User, Organization
@@ -14,18 +16,25 @@ from inference import predict_anomalies
 from mitre import map_to_mitre
 from auth import UserRegister, UserLogin, register_user, login_user, verify_user_token
 from security import TokenData, verify_token
+from websocket_manager import manager as ws_manager
+from logging_config import setup_logging
+from metrics import metrics
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup structured logging
+logger = setup_logging(logging.INFO)
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AI Network Incident Detection Dashboard")
+app = FastAPI(
+    title="AI-Driven Network Detection and Response Platform",
+    description="Production-ready incident detection and response system with ML anomaly detection and MITRE ATT&CK mapping",
+    version="3.0.0"
+)
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,7 +72,65 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "AI-NDR Platform",
+        "version": "3.0.0",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/metrics")
+def get_metrics():
+    """Get application metrics."""
+    logger.info("Metrics endpoint accessed")
+    return {
+        "metrics": metrics.get_metrics(),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+    """
+    WebSocket endpoint for real-time incident notifications.
+    Maintains organization-level isolation.
+    Usage: ws://localhost:8000/ws?token=<JWT_TOKEN>
+    """
+    org_id = None
+    conn_id = None
+
+    try:
+        # Authenticate and connect
+        org_id, conn_id = await ws_manager.connect(websocket, token)
+
+        # Send connection confirmation
+        await ws_manager.send_to_connection(
+            org_id, conn_id, "connection_established",
+            {"message": f"Connected to incident stream for organization {org_id}"}
+        )
+
+        logger.info(f"WebSocket connection established for org {org_id}")
+
+        # Keep connection alive and listen for messages
+        while True:
+            data = await websocket.receive_text()
+            logger.debug(f"WebSocket message from org {org_id}: {data}")
+
+            # Echo or handle commands
+            if data == "ping":
+                await ws_manager.send_to_connection(org_id, conn_id, "pong", {})
+
+    except WebSocketDisconnect:
+        if org_id and conn_id:
+            ws_manager.disconnect(org_id, conn_id)
+            logger.info(f"WebSocket disconnected for org {org_id}")
+
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+        if org_id and conn_id:
+            ws_manager.disconnect(org_id, conn_id)
 
 
 # ============= Authentication Endpoints =============
@@ -226,21 +293,47 @@ async def upload_logs(
             # Commit all changes at once
             db.commit()
 
-            # Refresh created incidents
+            # Refresh created incidents and broadcast via WebSocket
             for incident in db.query(Incident).filter(
                 Incident.status == "Pending"
             ).order_by(Incident.id.desc()).limit(len(incidents)).all():
                 created.append(incident)
 
+                # Broadcast incident creation to organization members
+                import asyncio
+                asyncio.create_task(
+                    ws_manager.broadcast_to_org(
+                        current_user.organization_id,
+                        "incident_created",
+                        {
+                            "incident_id": incident.id,
+                            "source_ip": incident.source_ip,
+                            "destination_ip": incident.destination_ip,
+                            "alert_type": incident.alert_type,
+                            "risk_level": incident.risk_level,
+                            "timestamp": incident.timestamp.isoformat() if incident.timestamp else None,
+                            "mitre_tactic": incident.mitre_tactic,
+                            "mitre_technique": incident.mitre_technique,
+                        }
+                    )
+                )
+
             logger.info(f"Created {len(created)} incidents, skipped {skipped} duplicates")
+
+            # Track metrics
+            metrics.increment_counter("logs_uploaded")
+            metrics.increment_counter("incidents_created", len(created))
+            metrics.increment_counter("incidents_skipped", skipped)
 
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Database error: {str(e)}")
+            metrics.increment_counter("upload_errors")
             raise HTTPException(500, "Database error while saving incidents")
         except Exception as e:
             db.rollback()
             logger.error(f"Unexpected error creating incidents: {str(e)}")
+            metrics.increment_counter("upload_errors")
             raise HTTPException(500, f"Error saving incidents: {str(e)}")
 
         return {
@@ -268,7 +361,7 @@ def get_incidents(
 
 
 @app.put("/incidents/{incident_id}/approve")
-def approve_incident(
+async def approve_incident(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
@@ -287,13 +380,30 @@ def approve_incident(
 
     incident.status = "Approved"
     db.commit()
+
+    # Broadcast status change
+    import asyncio
+    asyncio.create_task(
+        ws_manager.broadcast_to_org(
+            current_user.organization_id,
+            "incident_approved",
+            {
+                "incident_id": incident_id,
+                "status": "Approved",
+                "approved_by": current_user.email,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+    )
+
+    metrics.increment_counter("incidents_approved")
     logger.info(f"Incident {incident_id} approved by {current_user.email}")
 
     return {"message": "Incident approved successfully"}
 
 
 @app.put("/incidents/{incident_id}/reject")
-def reject_incident(
+async def reject_incident(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
@@ -312,6 +422,23 @@ def reject_incident(
 
     incident.status = "Rejected"
     db.commit()
+
+    # Broadcast status change
+    import asyncio
+    asyncio.create_task(
+        ws_manager.broadcast_to_org(
+            current_user.organization_id,
+            "incident_rejected",
+            {
+                "incident_id": incident_id,
+                "status": "Rejected",
+                "rejected_by": current_user.email,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+    )
+
+    metrics.increment_counter("incidents_rejected")
     logger.info(f"Incident {incident_id} rejected by {current_user.email}")
 
     return {"message": "Incident rejected successfully"}
