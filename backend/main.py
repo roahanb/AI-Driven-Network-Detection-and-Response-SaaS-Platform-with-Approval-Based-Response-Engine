@@ -1,15 +1,19 @@
 import logging
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+import os
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from typing import Optional
 
 from database import SessionLocal, engine, Base
-from models import Incident
+from models import Incident, User, Organization
 from schemas import IncidentOut
 from utils import parse_logs, detect_suspicious_events
 from inference import predict_anomalies
 from mitre import map_to_mitre
+from auth import UserRegister, UserLogin, register_user, login_user, verify_user_token
+from security import TokenData, verify_token
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +40,22 @@ def get_db():
         db.close()
 
 
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> TokenData:
+    """Dependency to extract and verify the current user from JWT token."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+
+    try:
+        token = authorization.split(" ")[1] if " " in authorization else authorization
+    except IndexError:
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    return verify_user_token(token, db)
+
+
 @app.get("/")
 def root():
     return {"message": "Backend is running"}
@@ -46,8 +66,44 @@ def health():
     return {"status": "healthy"}
 
 
+# ============= Authentication Endpoints =============
+
+@app.post("/api/v1/auth/register")
+def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    """Register a new user and create an organization if needed."""
+    try:
+        result = register_user(user_data, db)
+        logger.info(f"User registered successfully: {user_data.email}")
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+
+@app.post("/api/v1/auth/login")
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    """Login a user and return access/refresh tokens."""
+    try:
+        result = login_user(user_data, db)
+        logger.info(f"User logged in successfully: {user_data.email}")
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+
+# ============= Protected Endpoints =============
+
 @app.post("/upload-logs")
-async def upload_logs(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_logs(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
     """
     Upload and process network logs in JSON, CSV, or plain text format.
     Detects suspicious events and runs ML-based anomaly detection.
@@ -141,6 +197,7 @@ async def upload_logs(file: UploadFile = File(...), db: Session = Depends(get_db
 
                 # Create new incident
                 incident = Incident(
+                    organization_id=current_user.organization_id,
                     source_ip=source_ip,
                     destination_ip=dest_ip,
                     domain=incident_item.get("domain"),
@@ -200,31 +257,61 @@ async def upload_logs(file: UploadFile = File(...), db: Session = Depends(get_db
 
 
 @app.get("/incidents", response_model=list[IncidentOut])
-def get_incidents(db: Session = Depends(get_db)):
-    return db.query(Incident).order_by(Incident.id.desc()).all()
+def get_incidents(
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Get incidents for the current user's organization."""
+    return db.query(Incident).filter(
+        Incident.organization_id == current_user.organization_id
+    ).order_by(Incident.id.desc()).all()
 
 
 @app.put("/incidents/{incident_id}/approve")
-def approve_incident(incident_id: int, db: Session = Depends(get_db)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+def approve_incident(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Approve an incident (requires ANALYST or ADMIN role)."""
+    if current_user.role == "VIEWER":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    incident = db.query(Incident).filter(
+        Incident.id == incident_id,
+        Incident.organization_id == current_user.organization_id
+    ).first()
 
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
     incident.status = "Approved"
     db.commit()
+    logger.info(f"Incident {incident_id} approved by {current_user.email}")
 
     return {"message": "Incident approved successfully"}
 
 
 @app.put("/incidents/{incident_id}/reject")
-def reject_incident(incident_id: int, db: Session = Depends(get_db)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+def reject_incident(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Reject an incident (requires ANALYST or ADMIN role)."""
+    if current_user.role == "VIEWER":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    incident = db.query(Incident).filter(
+        Incident.id == incident_id,
+        Incident.organization_id == current_user.organization_id
+    ).first()
 
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
     incident.status = "Rejected"
     db.commit()
+    logger.info(f"Incident {incident_id} rejected by {current_user.email}")
 
     return {"message": "Incident rejected successfully"}
