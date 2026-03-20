@@ -1,3 +1,18 @@
 {
-    "claudeCode.useTerminal": true
+    "claudeCode.useTerminal": true,
+    "files.exclude": {
+        "**/*.md": true,
+        "**/*.docx": true,
+        "**/*.pdf": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/.DS_Store": true
+    },
+    "search.exclude": {
+        "**/*.md": true,
+        "**/*.docx": true,
+        "**/*.pdf": true,
+        "**/node_modules": true,
+        "**/__pycache__": true
+    }
 }

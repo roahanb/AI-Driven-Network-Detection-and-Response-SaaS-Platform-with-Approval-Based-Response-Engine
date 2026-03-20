@@ -1,3 +1,38 @@
 node_modules/
 .env
 dist/
+
+# Documentation - not for deployment
+*.md
+*.docx
+*.pdf
+~$*.docx
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Build artifacts
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Backups
+db_backup/
+*.sql.gz
+
+# Temp
+*.tmp
+*.bak

@@ -1,0 +1,40 @@
+# Documentation - not for Vercel deployment
+*.md
+*.docx
+*.pdf
+~$*.docx
+
+# Backend (Vercel only hosts frontend)
+backend/
+
+# Docker files
+docker-compose*.yml
+Dockerfile
+nginx.conf.prod
+prometheus.yml
+deploy.sh
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Backups
+db_backup/
+*.sql.gz
+
+# Secrets
+.env
+.env.*
+!.env.example
