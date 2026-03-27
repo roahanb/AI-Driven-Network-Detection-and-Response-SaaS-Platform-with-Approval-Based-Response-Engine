@@ -8,7 +8,7 @@ from pydantic import BaseModel
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 

@@ -143,33 +143,35 @@ function RiskTimeline({ incidents }) {
   const maxVal = Math.max(...byDay.map(([, v]) => v.high + v.medium + v.low), 1);
 
   return (
-    <div className="panel" style={{ marginBottom: 32 }}>
+    <div className="panel" style={{ marginBottom: 32, background: "rgba(255, 255, 255, 0.05)", border: "1px solid rgba(255, 255, 255, 0.12)" }}>
       <div className="panel-header">
         <div>
           <div className="eyebrow">Analytics</div>
           <h2>Incident Timeline</h2>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120, padding: "0 8px" }}>
-        {byDay.map(([day, counts]) => {
-          const total = counts.high + counts.medium + counts.low;
-          const heightPct = (total / maxVal) * 100;
-          return (
-            <div key={day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ width: "100%", height: `${heightPct}%`, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 4 }}>
-                <div style={{ width: "100%", height: `${(counts.high / Math.max(total, 1)) * 100}%`, background: "#ff4d4f", borderRadius: "4px 4px 0 0", minHeight: counts.high > 0 ? 4 : 0 }} />
-                <div style={{ width: "100%", height: `${(counts.medium / Math.max(total, 1)) * 100}%`, background: "#faad14", minHeight: counts.medium > 0 ? 4 : 0 }} />
-                <div style={{ width: "100%", height: `${(counts.low / Math.max(total, 1)) * 100}%`, background: "#52c41a", borderRadius: "0 0 4px 4px", minHeight: counts.low > 0 ? 4 : 0 }} />
+      <div style={{ background: "rgba(0, 0, 0, 0.3)", padding: 20, borderRadius: 12, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 200, padding: "16px 8px" }}>
+          {byDay.map(([day, counts]) => {
+            const total = counts.high + counts.medium + counts.low;
+            const heightPct = (total / maxVal) * 100;
+            return (
+              <div key={day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                <div style={{ width: "100%", height: `${Math.max(heightPct, 8)}%`, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 8, background: "rgba(255,255,255,0.03)", borderRadius: 6, padding: 2 }}>
+                  <div style={{ width: "100%", height: `${(counts.high / Math.max(total, 1)) * 100}%`, background: "#ff6b6b", borderRadius: "3px 3px 0 0", minHeight: counts.high > 0 ? 6 : 0, boxShadow: counts.high > 0 ? "0 0 8px rgba(255, 107, 107, 0.4)" : "none" }} />
+                  <div style={{ width: "100%", height: `${(counts.medium / Math.max(total, 1)) * 100}%`, background: "#ffa94d", minHeight: counts.medium > 0 ? 6 : 0, boxShadow: counts.medium > 0 ? "0 0 6px rgba(255, 169, 77, 0.3)" : "none" }} />
+                  <div style={{ width: "100%", height: `${(counts.low / Math.max(total, 1)) * 100}%`, background: "#51cf66", borderRadius: "0 0 3px 3px", minHeight: counts.low > 0 ? 6 : 0, boxShadow: counts.low > 0 ? "0 0 6px rgba(81, 207, 102, 0.3)" : "none" }} />
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 500, whiteSpace: "nowrap" }}>{day.slice(5)}</div>
               </div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", transform: "rotate(-45deg)", whiteSpace: "nowrap" }}>{day.slice(5)}</div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 16, marginTop: 12, padding: "0 8px" }}>
-        {[["#ff4d4f", "High"], ["#faad14", "Medium"], ["#52c41a", "Low"]].map(([color, label]) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
-            <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }} />
+      <div style={{ display: "flex", gap: 20, padding: "0 8px" }}>
+        {[["#ff6b6b", "High"], ["#ffa94d", "Medium"], ["#51cf66", "Low"]].map(([color, label]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.8)" }}>
+            <div style={{ width: 12, height: 12, background: color, borderRadius: 3, boxShadow: `0 0 6px ${color}40` }} />
             {label}
           </div>
         ))}
@@ -258,6 +260,69 @@ function LoginPage({ onLoginSuccess, toast }) {
 }
 
 // ─────────────────────────────────────────────
+// Confirm Dialog (replaces browser popup)
+// ─────────────────────────────────────────────
+function ConfirmDialog({ title, message, onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 10000,
+      background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        background: "#1a1f2e", border: "1px solid rgba(255,100,100,0.3)",
+        borderRadius: 14, padding: "28px 32px", maxWidth: 420, width: "90%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "white", marginBottom: 10 }}>{title}</div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", marginBottom: 24, lineHeight: 1.6 }}>{message}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={{
+            padding: "9px 20px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
+            background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)",
+            cursor: "pointer", fontSize: 14,
+          }}>Cancel</button>
+          <button onClick={onConfirm} style={{
+            padding: "9px 20px", borderRadius: 8, border: "1px solid rgba(255,80,80,0.5)",
+            background: "rgba(255,80,80,0.15)", color: "#ff6b6b",
+            cursor: "pointer", fontSize: 14, fontWeight: 600,
+          }}>Delete All</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Human-readable incident title
+// ─────────────────────────────────────────────
+function friendlyTitle(alertType) {
+  if (!alertType) return "Network Event";
+  const a = alertType.toLowerCase();
+  if (a.startsWith("dns-query:")) return "DNS Lookup: " + alertType.split(": ")[1];
+  if (a.startsWith("tls:"))       return "Secure Connection: " + alertType.split(": ")[1];
+  if (a.startsWith("http:"))      return "Web Request: " + alertType.split(": ")[1];
+  if (a.startsWith("dns-query"))  return "DNS Lookup";
+  if (a.includes("netflow:tcp"))  return "TCP Network Flow";
+  if (a.includes("netflow:udp"))  return "UDP Network Flow";
+  if (a.includes("flow:tcp"))     return "TCP Connection";
+  if (a.includes("flow:udp"))     return "UDP Connection";
+  if (a.includes("anomaly"))      return "Network Anomaly Detected";
+  if (a.includes("portscan") || a.includes("port scan")) return "Port Scan Detected";
+  if (a.includes("brute"))        return "Brute Force Attempt";
+  if (a.includes("exploit"))      return "Exploit Attempt";
+  if (a.includes("malware"))      return "Malware Communication";
+  if (a.includes("ransomware"))   return "Ransomware Activity";
+  if (a.includes("c2") || a.includes("beacon")) return "C2 Beacon Detected";
+  if (a.includes("ddos") || a.includes("flood")) return "DDoS / Flood Attack";
+  if (a.includes("ssh"))          return "SSH Activity";
+  if (a.includes("ftp"))          return "FTP Activity";
+  if (a.includes("dns"))          return "DNS Activity";
+  // Capitalise whatever remains
+  return alertType.replace(/[-_:]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ─────────────────────────────────────────────
 // Dashboard Page
 // ─────────────────────────────────────────────
 function DashboardPage({ user, onLogout, toast }) {
@@ -268,9 +333,12 @@ function DashboardPage({ user, onLogout, toast }) {
   const [search, setSearch] = useState("");
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [activeTab, setActiveTab] = useState("incidents");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [liveNotifs, setLiveNotifs] = useState([]);
+  const [watcherRunning, setWatcherRunning] = useState(false);
+  const [watcherUptime, setWatcherUptime] = useState(null);
+  const [watcherLoading, setWatcherLoading] = useState(false);
   const wsRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // fetch incidents
   const fetchIncidents = useCallback(async () => {
@@ -284,14 +352,48 @@ function DashboardPage({ user, onLogout, toast }) {
 
   useEffect(() => { fetchIncidents(); }, [fetchIncidents]);
 
+  // Poll watcher status every 5s
+  const fetchWatcherStatus = useCallback(async () => {
+    try {
+      const res = await makeClient().get("/watcher/status");
+      setWatcherRunning(res.data.running);
+      setWatcherUptime(res.data.uptime);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    fetchWatcherStatus();
+    const t = setInterval(fetchWatcherStatus, 5000);
+    return () => clearInterval(t);
+  }, [fetchWatcherStatus]);
+
+  const toggleWatcher = async () => {
+    setWatcherLoading(true);
+    try {
+      if (watcherRunning) {
+        await makeClient().post("/watcher/stop");
+        toast("Watcher stopped", "info");
+      } else {
+        await makeClient().post("/watcher/start");
+        toast("Watcher started — monitoring live traffic", "success");
+      }
+      await fetchWatcherStatus();
+    } catch (err) {
+      toast(err.response?.data?.detail || "Watcher control failed", "error");
+    } finally {
+      setWatcherLoading(false);
+    }
+  };
+
   // WebSocket real-time connection
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws?token=${token}`;
+    // In dev (port 3001) connect to backend directly on 8000; in prod use same host
+    const wsHost = process.env.NODE_ENV === "development" ? "localhost:8000" : window.location.host;
+    const wsUrl = `${protocol}//${wsHost}/ws?token=${token}`;
 
     const connect = () => {
       try {
@@ -305,17 +407,17 @@ function DashboardPage({ user, onLogout, toast }) {
         ws.onerror = () => setWsStatus("error");
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
-            if (data.type === "incident_created") {
-              const notif = { id: Date.now(), message: `New incident: ${data.payload?.alert_type} from ${data.payload?.source_ip}` };
+            const msg = JSON.parse(event.data);
+            const evtType = msg.event || msg.type;
+            const payload = msg.data || msg.payload || {};
+            if (evtType === "incident_created" || evtType === "new_incidents") {
+              const alertType = payload.alert_type || payload.incidents?.[0]?.alert_type || "event";
+              const srcIp = payload.source_ip || payload.incidents?.[0]?.source_ip || "";
+              const risk = payload.risk_level || payload.incidents?.[0]?.risk_level || "";
+              const notif = { id: Date.now(), message: `New: ${alertType}${srcIp ? " from " + srcIp : ""}` };
               setLiveNotifs((prev) => [notif, ...prev].slice(0, 5));
-              toast(`New ${data.payload?.risk_level} risk incident detected`, "info");
-              fetchIncidents();
-            } else if (data.type === "incident_approved") {
-              toast(`Incident #${data.payload?.incident_id} approved`, "success");
-              fetchIncidents();
-            } else if (data.type === "incident_rejected") {
-              toast(`Incident #${data.payload?.incident_id} rejected`, "info");
+              if (risk === "High") toast(`HIGH RISK: ${alertType}${srcIp ? " from " + srcIp : ""}`, "error");
+              else if (risk === "Medium") toast(`Medium risk: ${alertType}`, "info");
               fetchIncidents();
             }
           } catch (_) {}
@@ -327,7 +429,13 @@ function DashboardPage({ user, onLogout, toast }) {
     return () => { if (wsRef.current) wsRef.current.close(); };
   }, [fetchIncidents, toast]);
 
-  // upload handler
+  // Auto-poll every 5s as real-time fallback (ensures UI stays live even if WS drops)
+  useEffect(() => {
+    const interval = setInterval(fetchIncidents, 5000);
+    return () => clearInterval(interval);
+  }, [fetchIncidents]);
+
+  // upload handler (kept for watcher API compatibility, not used in UI)
   const handleUpload = async () => {
     if (!file) { toast("Please select a log file first", "error"); return; }
     const formData = new FormData();
@@ -339,7 +447,6 @@ function DashboardPage({ user, onLogout, toast }) {
       });
       toast(`${res.data.message} — ${res.data.incidents_found} incidents found`, "success");
       setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
       await fetchIncidents();
     } catch (err) {
       toast(err.response?.data?.detail || "Upload failed", "error");
@@ -359,14 +466,100 @@ function DashboardPage({ user, onLogout, toast }) {
     }
   };
 
+  // delete all incidents
+  const deleteAllIncidents = () => setConfirmOpen(true);
+
+  const confirmDelete = async () => {
+    setConfirmOpen(false);
+    try {
+      setLoading(true);
+      await makeClient().delete("/incidents");
+      toast("All incidents deleted successfully", "success");
+      await fetchIncidents();
+    } catch (err) {
+      if (err.response?.status === 403) toast("Only ADMIN users can delete incidents", "error");
+      else toast(err.response?.data?.detail || "Delete failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadTodayLogs = () => {
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const todayIncidents = incidents.filter((i) => {
+      if (!i.timestamp) return false;
+      return new Date(i.timestamp).toISOString().slice(0, 10) === todayStr;
+    });
+
+    const high = todayIncidents.filter((i) => i.risk_level === "High");
+    const medium = todayIncidents.filter((i) => i.risk_level === "Medium");
+    const low = todayIncidents.filter((i) => i.risk_level === "Low");
+
+    const fmt = (i) => [
+      `  Incident #${i.id}`,
+      `  Time      : ${i.timestamp ? new Date(i.timestamp).toLocaleString() : "N/A"}`,
+      `  Alert     : ${i.alert_type || "N/A"}`,
+      `  Source IP : ${i.source_ip || "N/A"}`,
+      `  Dest IP   : ${i.destination_ip || "N/A"}`,
+      `  Domain    : ${i.domain || "N/A"}`,
+      `  Status    : ${i.status || "N/A"}`,
+      `  MITRE     : ${i.mitre_tactic || "N/A"}${i.mitre_tactic_id ? ` (${i.mitre_tactic_id})` : ""}`,
+      `  AI Score  : ${i.ai_score != null ? Number(i.ai_score).toFixed(4) : "N/A"}`,
+      `  Summary   : ${i.summary || "N/A"}`,
+      `  Action    : ${i.recommended_action || "N/A"}`,
+      "",
+    ].join("\n");
+
+    const lines = [
+      "═".repeat(70),
+      `  NDR NETWORK ACTIVITY REPORT`,
+      `  Date       : ${today.toDateString()}`,
+      `  Generated  : ${today.toLocaleString()}`,
+      `  Interface  : en0 (Suricata Live Monitor)`,
+      "═".repeat(70),
+      "",
+      `SUMMARY`,
+      `  Total Incidents Today : ${todayIncidents.length}`,
+      `  High Risk             : ${high.length}`,
+      `  Medium Risk           : ${medium.length}`,
+      `  Low Risk              : ${low.length}`,
+      "",
+      "─".repeat(70),
+      `HIGH RISK INCIDENTS (${high.length})`,
+      "─".repeat(70),
+      high.length === 0 ? "  None\n" : high.map(fmt).join("\n"),
+      "─".repeat(70),
+      `MEDIUM RISK INCIDENTS (${medium.length})`,
+      "─".repeat(70),
+      medium.length === 0 ? "  None\n" : medium.map(fmt).join("\n"),
+      "─".repeat(70),
+      `LOW RISK INCIDENTS (${low.length})`,
+      "─".repeat(70),
+      low.length === 0 ? "  None\n" : low.map(fmt).join("\n"),
+      "═".repeat(70),
+      `  END OF REPORT — roahacks.com NDR Platform`,
+      "═".repeat(70),
+    ];
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NDR_Report_${todayStr}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Downloaded report — ${todayIncidents.length} incidents`, "success");
+  };
+
   const stats = useMemo(() => ({
     total: incidents.length,
     high: incidents.filter((i) => i.risk_level === "High").length,
     medium: incidents.filter((i) => i.risk_level === "Medium").length,
     low: incidents.filter((i) => i.risk_level === "Low").length,
-    pending: incidents.filter((i) => i.status === "Pending").length,
-    approved: incidents.filter((i) => i.status === "Approved").length,
-    rejected: incidents.filter((i) => i.status === "Rejected").length,
+    active: incidents.filter((i) => i.status === "Active").length,
+    monitoring: incidents.filter((i) => i.status === "Monitoring").length,
+    cleared: incidents.filter((i) => i.status === "Cleared").length,
   }), [incidents]);
 
   const filtered = useMemo(() => {
@@ -398,12 +591,20 @@ function DashboardPage({ user, onLogout, toast }) {
       <div className="ambient ambient-two" />
 
       {/* Header */}
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Delete All Incidents"
+          message={`This will permanently remove all ${stats.total} incidents from the platform. Suricata will continue monitoring and new incidents will appear automatically.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
       <header className="hero">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: 3, textTransform: "uppercase", marginBottom: 6 }}>roahacks.com</div>
             <div className="hero-badge">AI-Driven Security Operations</div>
-            <h1>Network Detection &amp; Response</h1>
+            <h1>Network Detection</h1>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -421,16 +622,85 @@ function DashboardPage({ user, onLogout, toast }) {
           </div>
         </div>
 
-        <p className="hero-subtitle">Enterprise-grade incident visibility with AI triage and human approval workflows.</p>
+        <p className="hero-subtitle">Real-time AI-powered network threat detection with Suricata live monitoring.</p>
 
-        <div className="hero-actions" style={{ flexWrap: "wrap", gap: 10 }}>
-          <label className="file-picker" style={{ flex: "1 1 200px" }}>
-            <span>{file ? file.name : "Choose log file (.txt, .csv, .json, .log)"}</span>
-            <input ref={fileInputRef} type="file" accept=".txt,.log,.csv,.json" onChange={(e) => setFile(e.target.files[0])} />
-          </label>
-          <button className="primary-btn" onClick={handleUpload} disabled={loading} style={{ flex: "0 0 auto" }}>
-            {loading ? "Uploading..." : "Upload & Analyze"}
-          </button>
+        <div className="hero-actions" style={{ flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          {/* Watcher Start/Stop control */}
+          <div style={{
+            flex: "1 1 200px", display: "flex", alignItems: "center",
+            justifyContent: "space-between", gap: 12,
+            background: watcherRunning ? "rgba(82,196,26,0.06)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${watcherRunning ? "rgba(82,196,26,0.25)" : "rgba(255,255,255,0.1)"}`,
+            borderRadius: 10, padding: "12px 18px", transition: "all 0.3s",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                background: watcherRunning ? "#52c41a" : "rgba(255,255,255,0.25)",
+                boxShadow: watcherRunning ? "0 0 10px #52c41a" : "none",
+                animation: watcherRunning ? "pulse 1.5s infinite" : "none",
+              }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>
+                  Suricata · {watcherRunning ? "Live Monitoring" : "Stopped"}
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+                  {watcherRunning
+                    ? `en0 · eve.json stream${watcherUptime ? " · up " + watcherUptime : ""}`
+                    : "Click Start to begin network monitoring"}
+                </div>
+              </div>
+            </div>
+            {user.role === "ADMIN" && (
+              <button
+                onClick={toggleWatcher}
+                disabled={watcherLoading}
+                style={{
+                  padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  cursor: watcherLoading ? "default" : "pointer",
+                  border: watcherRunning ? "1px solid rgba(255,100,100,0.4)" : "1px solid rgba(82,196,26,0.4)",
+                  background: watcherRunning ? "rgba(255,100,100,0.12)" : "rgba(82,196,26,0.12)",
+                  color: watcherRunning ? "#ff6b6b" : "#52c41a",
+                  transition: "all 0.2s", opacity: watcherLoading ? 0.6 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {watcherLoading ? "..." : watcherRunning ? "⏹ Stop" : "▶ Start"}
+              </button>
+            )}
+          </div>
+
+          {user.role === "ADMIN" && stats.total > 0 && (
+            <button
+              onClick={deleteAllIncidents}
+              disabled={loading}
+              style={{
+                flex: "0 0 auto",
+                padding: "12px 22px",
+                borderRadius: 10,
+                border: "1px solid rgba(255, 100, 100, 0.4)",
+                background: "rgba(255, 100, 100, 0.1)",
+                color: "#ff6b6b",
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "default" : "pointer",
+                transition: "all 0.2s",
+                opacity: loading ? 0.55 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.background = "rgba(255, 100, 100, 0.2)";
+                  e.currentTarget.style.borderColor = "rgba(255, 100, 100, 0.6)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(255, 100, 100, 0.1)";
+                e.currentTarget.style.borderColor = "rgba(255, 100, 100, 0.4)";
+              }}
+            >
+              Delete All
+            </button>
+          )}
         </div>
 
         {liveNotifs.length > 0 && (
@@ -451,8 +721,8 @@ function DashboardPage({ user, onLogout, toast }) {
           ["High Risk", stats.high, "#ff4d4f"],
           ["Medium", stats.medium, "#faad14"],
           ["Low", stats.low, "#52c41a"],
-          ["Pending", stats.pending, "#a0a0ff"],
-          ["Approved", stats.approved, "#52c41a"],
+          ["Active", stats.active, "#ff6b6b"],
+          ["Monitoring", stats.monitoring, "#faad14"],
         ].map(([label, val, color]) => (
           <div className="stat-card" key={label}>
             <div className="stat-label">{label}</div>
@@ -487,14 +757,14 @@ function DashboardPage({ user, onLogout, toast }) {
               <div className="eyebrow">Operations Console</div>
               <h2>Detected Incidents</h2>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <input
                 placeholder="Search IP, alert, domain..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ padding: "7px 12px", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, background: "rgba(255,255,255,0.06)", color: "white", fontSize: 13, width: 220 }}
               />
-              {["all", "high", "medium", "low", "pending", "approved"].map((f) => (
+              {["all", "high", "medium", "low", "active", "monitoring", "cleared"].map((f) => (
                 <button key={f} onClick={() => setFilter(f)} style={{
                   padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
                   border: "1px solid rgba(255,255,255,0.15)",
@@ -504,13 +774,65 @@ function DashboardPage({ user, onLogout, toast }) {
                   {f.charAt(0).toUpperCase() + f.slice(1)}
                 </button>
               ))}
+              <button
+                onClick={downloadTodayLogs}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600,
+                  border: "1px solid rgba(100,220,180,0.4)",
+                  background: "rgba(100,220,180,0.1)",
+                  color: "rgba(100,220,180,1)",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(100,220,180,0.2)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(100,220,180,0.1)"; }}
+                title="Download today's network activity report"
+              >
+                ↓ Download Today's Report
+              </button>
             </div>
           </div>
+
+          {/* High Alert Banner */}
+          {incidents.filter((i) => i.risk_level === "High").length > 0 && (
+            <div style={{
+              margin: "0 0 20px 0",
+              border: "1px solid rgba(255,77,79,0.5)",
+              borderRadius: 10,
+              background: "rgba(255,77,79,0.07)",
+              padding: "14px 18px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff4d4f", boxShadow: "0 0 10px #ff4d4f", animation: "pulse 1.5s infinite" }} />
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "#ff4d4f", textTransform: "uppercase" }}>
+                  High Risk Alerts — {incidents.filter((i) => i.risk_level === "High").length} Active
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {incidents.filter((i) => i.risk_level === "High").map((inc) => (
+                  <div key={inc.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+                    background: "rgba(255,77,79,0.08)", border: "1px solid rgba(255,77,79,0.25)",
+                    borderRadius: 8, padding: "10px 14px",
+                  }}>
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>#{inc.id}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "white" }}>{friendlyTitle(inc.alert_type)}</span>
+                      <span style={{ fontSize: 12, color: "rgba(255,180,180,0.8)" }}>{inc.source_ip || "N/A"} → {inc.destination_ip || "N/A"}</span>
+                      {inc.mitre_tactic && <span style={{ fontSize: 11, color: "rgba(100,200,255,0.7)", background: "rgba(100,200,255,0.1)", padding: "2px 7px", borderRadius: 4 }}>{inc.mitre_tactic}</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
+                      {inc.timestamp ? new Date(inc.timestamp).toLocaleTimeString() : "N/A"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {filtered.length === 0 ? (
             <div className="empty-state">
               <h3>{incidents.length === 0 ? "No incidents yet" : "No matching incidents"}</h3>
-              <p>{incidents.length === 0 ? "Upload a log file to start detection." : "Try adjusting your filters."}</p>
+              <p>{incidents.length === 0 ? "Suricata is monitoring your network. Incidents will appear automatically." : "Try adjusting your filters."}</p>
             </div>
           ) : (
             <div className="incident-grid">
@@ -519,7 +841,7 @@ function DashboardPage({ user, onLogout, toast }) {
                   <div className="incident-top">
                     <div>
                       <div className="incident-id">Incident #{incident.id}</div>
-                      <div className="incident-title">{incident.alert_type || "Unknown alert"}</div>
+                      <div className="incident-title">{friendlyTitle(incident.alert_type)}</div>
                     </div>
                     <div className="badge-stack">
                       <span className={getRiskClass(incident.risk_level)}>{incident.risk_level || "N/A"}</span>
@@ -584,16 +906,6 @@ function DashboardPage({ user, onLogout, toast }) {
                     <p className="ai-reason">{incident.ai_reason || "No AI explanation available."}</p>
                   </div>
 
-                  {user.role !== "VIEWER" && (
-                    <div className="button-row">
-                      <button className="ghost-btn approve-btn" onClick={() => updateStatus(incident.id, "approve")} disabled={incident.status !== "Pending"}>
-                        Approve
-                      </button>
-                      <button className="ghost-btn reject-btn" onClick={() => updateStatus(incident.id, "reject")} disabled={incident.status !== "Pending"}>
-                        Reject
-                      </button>
-                    </div>
-                  )}
                 </article>
               ))}
             </div>

@@ -478,3 +478,8 @@ input[type="password"]:focus {
 @media (max-width: 480px) {
   .stats-grid        { grid-template-columns: 1fr 1fr; }
 }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.4); }
+}

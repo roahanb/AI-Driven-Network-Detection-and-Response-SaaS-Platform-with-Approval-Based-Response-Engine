@@ -19,16 +19,17 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, token: str):
         """Connect a new WebSocket client and authenticate."""
+        # Accept first — required by WebSocket protocol before any close()
+        await websocket.accept()
         try:
             # Verify token
             token_data = verify_token(token)
             if not token_data or not token_data.organization_id:
+                await websocket.close(code=1008, reason="Unauthorized")
                 raise HTTPException(status_code=401, detail="Invalid token")
 
             org_id = token_data.organization_id
             user_id = token_data.user_id
-
-            await websocket.accept()
 
             # Initialize organization connections if needed
             if org_id not in self.active_connections:
@@ -46,7 +47,6 @@ class ConnectionManager:
 
         except Exception as e:
             logger.error(f"WebSocket connection error: {str(e)}")
-            await websocket.close(code=1008, reason="Unauthorized")
             raise
 
     def disconnect(self, org_id: int, conn_id: str):

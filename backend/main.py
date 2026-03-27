@@ -1,12 +1,15 @@
 import logging
 import os
+import sys
 import time
+import subprocess
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database import SessionLocal, engine, Base
 from models import Incident, User, Organization
@@ -262,6 +265,12 @@ async def upload_logs(
                     summary=incident_item.get("summary", ""),
                 )
 
+                # Derive AI score from risk level if ML returned 0
+                risk_level = incident_item.get("risk_level", "Low")
+                ai_score = ai_data.get("ai_score") or 0.0
+                if ai_score == 0.0:
+                    ai_score = {"High": 0.92, "Medium": 0.65, "Low": 0.28}.get(risk_level, 0.28)
+
                 # Create new incident
                 incident = Incident(
                     organization_id=current_user.organization_id,
@@ -271,12 +280,12 @@ async def upload_logs(
                     timestamp=incident_item.get("timestamp"),
                     alert_type=incident_item.get("alert_type"),
                     summary=incident_item.get("summary"),
-                    risk_level=incident_item.get("risk_level"),
+                    risk_level=risk_level,
                     recommended_action=incident_item.get("recommended_action"),
-                    status=incident_item.get("status", "Pending"),
-                    ai_prediction=ai_data.get("ai_prediction"),
-                    ai_score=ai_data.get("ai_score"),
-                    ai_reason=ai_data.get("ai_reason"),
+                    status=incident_item.get("status", "Active"),
+                    ai_prediction=ai_data.get("ai_prediction") or ("suspicious" if risk_level != "Low" else "normal"),
+                    ai_score=ai_score,
+                    ai_reason=ai_data.get("ai_reason") or f"Rule-based detection: {risk_level} risk threat signature identified.",
                     # ML ensemble fields (paper Section 4.2 + ABRE 4.3)
                     attack_category=ai_data.get("attack_category"),
                     threat_score=ai_data.get("threat_score"),
@@ -449,3 +458,122 @@ async def reject_incident(
     logger.info(f"Incident {incident_id} rejected by {current_user.email}")
 
     return {"message": "Incident rejected successfully"}
+
+
+@app.delete("/incidents")
+async def delete_all_incidents(
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Delete all incidents for the current user's organization (ADMIN only)."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only ADMIN users can delete incidents")
+
+    try:
+        count = db.query(Incident).filter(
+            Incident.organization_id == current_user.organization_id
+        ).delete()
+        db.commit()
+        logger.info(f"Deleted {count} incidents for org {current_user.organization_id} by {current_user.email}")
+        metrics.increment_counter("incidents_deleted", count)
+        return {"message": f"Successfully deleted {count} incidents"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting incidents: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete incidents")
+
+
+# ============= Watcher Management =============
+
+WATCHER_SCRIPT = Path(__file__).parent.parent / "suricata" / "ndr_watcher.py"
+
+# In-memory watcher state
+_watcher_proc: Optional[subprocess.Popen] = None
+_watcher_started_at: Optional[datetime] = None
+
+
+def _watcher_running() -> bool:
+    global _watcher_proc
+    if _watcher_proc is None:
+        return False
+    if _watcher_proc.poll() is not None:
+        _watcher_proc = None
+        return False
+    return True
+
+
+@app.get("/watcher/status")
+def watcher_status(current_user: TokenData = Depends(get_current_user)):
+    running = _watcher_running()
+    uptime = None
+    if running and _watcher_started_at:
+        secs = int((datetime.utcnow() - _watcher_started_at).total_seconds())
+        h, m, s = secs // 3600, (secs % 3600) // 60, secs % 60
+        uptime = f"{h:02d}:{m:02d}:{s:02d}"
+    return {"running": running, "uptime": uptime}
+
+
+@app.post("/watcher/start")
+def watcher_start(
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    global _watcher_proc, _watcher_started_at
+
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only ADMIN can control the watcher")
+
+    if _watcher_running():
+        return {"message": "Watcher already running"}
+
+    if not WATCHER_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail=f"Watcher script not found: {WATCHER_SCRIPT}")
+
+    # Generate a long-lived token (24h) for the watcher subprocess
+    token_data = {
+        "email": current_user.email,
+        "user_id": current_user.user_id,
+        "organization_id": current_user.organization_id,
+        "role": current_user.role,
+    }
+    from security import create_access_token
+    watcher_token = create_access_token(token_data, expires_delta=timedelta(hours=24))
+
+    try:
+        _watcher_proc = subprocess.Popen(
+            [sys.executable, str(WATCHER_SCRIPT),
+             "--api", "http://localhost:8000",
+             "--token", watcher_token],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        _watcher_started_at = datetime.utcnow()
+        logger.info(f"Watcher started (PID {_watcher_proc.pid}) by {current_user.email}")
+        return {"message": "Watcher started", "pid": _watcher_proc.pid}
+    except Exception as e:
+        logger.error(f"Failed to start watcher: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/watcher/stop")
+def watcher_stop(current_user: TokenData = Depends(get_current_user)):
+    global _watcher_proc, _watcher_started_at
+
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only ADMIN can control the watcher")
+
+    if not _watcher_running():
+        return {"message": "Watcher is not running"}
+
+    _watcher_proc.terminate()
+    try:
+        _watcher_proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        _watcher_proc.kill()
+
+    pid = _watcher_proc.pid
+    _watcher_proc = None
+    _watcher_started_at = None
+    logger.info(f"Watcher stopped (PID {pid}) by {current_user.email}")
+    return {"message": "Watcher stopped"}

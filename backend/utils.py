@@ -38,10 +38,18 @@ def _parse_suricata_eve(obj: dict) -> Optional[Dict[str, Any]]:
         or "suricata-event"
     )
 
+    # Extract DNS domain — Suricata 8.x uses dns.queries[{rrname}], older uses dns.rrname
+    dns_domain = (
+        dns.get("rrname")
+        or (dns.get("queries") or [{}])[0].get("rrname", "")
+        or (dns.get("answers") or [{}])[0].get("rrname", "")
+        or ""
+    )
+
     # Domain from HTTP host, DNS query, or TLS SNI
     domain = (
         http.get("hostname")
-        or dns.get("rrname")
+        or dns_domain
         or tls.get("sni")
         or obj.get("domain")
         or ""
@@ -52,6 +60,19 @@ def _parse_suricata_eve(obj: dict) -> Optional[Dict[str, Any]]:
     suricata_severity = alert.get("severity", 3)
     risk_level = severity_map.get(suricata_severity, "Low")
 
+    # Make alert_type human-readable — use domain for DNS/TLS/HTTP lookups
+    if event_type == "dns" and domain:
+        display_alert = f"dns-query: {domain}"
+    elif event_type == "tls" and domain:
+        display_alert = f"tls: {domain}"
+    elif event_type == "http" and domain:
+        display_alert = f"http: {domain}"
+    elif event_type in ("flow", "netflow"):
+        proto = obj.get("proto", "").lower()
+        display_alert = f"{event_type}:{proto}" if proto else event_type
+    else:
+        display_alert = str(signature)
+
     return {
         "source": "suricata",
         "timestamp": obj.get("timestamp") or obj.get("time") or "",
@@ -60,7 +81,7 @@ def _parse_suricata_eve(obj: dict) -> Optional[Dict[str, Any]]:
         "source_port": obj.get("src_port"),
         "destination_port": obj.get("dest_port"),
         "domain": str(domain),
-        "alert_type": str(signature),
+        "alert_type": display_alert,
         "protocol": obj.get("proto", ""),
         "event_type": event_type,
         "risk_level": risk_level,
@@ -397,75 +418,85 @@ def parse_logs(text: str) -> List[Dict[str, Any]]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def detect_suspicious_events(events: list) -> list:
-    """Detect suspicious events based on rules and patterns."""
-    suspicious = []
-    ip_counts = Counter(e["source_ip"] for e in events)
+    """
+    Process ALL network events and classify them by risk.
+    Every event from Suricata is logged — nothing is silently dropped.
+
+    Risk classification:
+    - High   : known threat signatures, Suricata severity 1
+    - Medium : scan/brute/anomaly, Suricata severity 2
+    - Low    : normal traffic (dns, flow, http, tls, conn)
+
+    Status is auto-assigned (no manual approval):
+    - High   → Active
+    - Medium → Monitoring
+    - Low    → Cleared
+    """
+    results = []
+
+    HIGH_RISK_KEYWORDS = {
+        "ransomware", "heartbleed", "exploit", "c2", "exfil", "infiltrat",
+        "trojan", "backdoor", "shellcode", "webshell", "mimikatz",
+    }
+    MEDIUM_RISK_KEYWORDS = {
+        "scan", "brute", "beacon", "ddos", "flood", "dos", "patator",
+        "injection", "attack", "malware", "bot", "worm", "anomaly",
+    }
+    BAD_DOMAINS = {"malware", "phish", "exploit", "botnet", "evil", "malicious", "trojan", "ransom"}
 
     for event in events:
-        alert = event.get("alert_type", "").lower()
+        alert_raw = event.get("alert_type", "unknown")
+        alert = alert_raw.lower()
         domain = event.get("domain", "").lower()
         src_ip = event.get("source_ip", "")
         dst_ip = event.get("destination_ip", "")
         timestamp = event.get("timestamp", "")
-        alert_type = event.get("alert_type", "")
         domain_value = event.get("domain", "")
+        risk_hint = event.get("risk_level")  # from Suricata severity parser
 
-        # Try to get risk_level from parsed event, fallback to None
-        risk_level_hint = event.get("risk_level")
+        if not src_ip or not dst_ip:
+            continue
 
-        reasons = []
+        # ── Classify risk ───────────────────────────────────────────────────
+        if risk_hint == "High" or any(k in alert for k in HIGH_RISK_KEYWORDS) or \
+           any(k in domain for k in BAD_DOMAINS):
+            risk_level = "High"
+            status = "Active"
+            recommended_action = "Block IP immediately and isolate affected host"
+            signal_label = "CRITICAL threat signature detected"
 
-        if any(k in alert for k in [
-            "scan", "exploit", "attack", "malware", "brute", "injection",
-            "flood", "dos", "ddos", "ransomware", "exfil", "beacon",
-            "c2", "heartbleed", "infiltrat", "patator", "bot",
-        ]):
-            reasons.append(f"Suspicious alert type: {alert_type}")
+        elif risk_hint == "Medium" or any(k in alert for k in MEDIUM_RISK_KEYWORDS):
+            risk_level = "Medium"
+            status = "Monitoring"
+            recommended_action = "Investigate source host and monitor traffic"
+            signal_label = "Suspicious pattern detected"
 
-        if ip_counts[src_ip] >= 3:
-            reasons.append(f"Repeated source IP activity from {src_ip}")
+        else:
+            # Low risk — only keep if it has a domain (user browsing activity)
+            # Pure flow/connection events with no domain are silently discarded
+            if not domain_value:
+                continue
+            risk_level = "Low"
+            status = "Cleared"
+            recommended_action = "Normal traffic — no action required"
+            signal_label = "Network activity recorded"
 
-        if any(k in domain for k in ["malware", "phish", "exploit", "botnet", "evil", "bad", "malicious"]):
-            reasons.append(f"Suspicious domain: {domain_value}")
+        summary = (
+            f"{signal_label}: {alert_raw} | "
+            f"{src_ip} → {dst_ip}"
+            f"{' | Domain: ' + domain_value if domain_value else ''}."
+        )
 
-        if reasons:
-            # Determine risk level
-            if any(k in alert for k in ["ransomware", "heartbleed", "exploit", "c2", "exfil"]) or \
-               any(k in domain for k in ["malicious", "malware", "botnet", "trojan", "ransomware"]):
-                risk_level = "High"
-                recommended_action = "Block IP and isolate affected host"
-            elif "scan" in alert or "brute" in alert or "beacon" in alert or \
-                 "ddos" in alert or "flood" in alert or ip_counts[src_ip] >= 3:
-                risk_level = "Medium"
-                recommended_action = "Investigate source host and monitor traffic"
-            else:
-                risk_level = "Low"
-                recommended_action = "Review event and continue monitoring"
+        results.append({
+            "timestamp": timestamp,
+            "source_ip": src_ip,
+            "destination_ip": dst_ip,
+            "domain": domain_value,
+            "alert_type": alert_raw,
+            "summary": summary,
+            "risk_level": risk_level,
+            "recommended_action": recommended_action,
+            "status": status,
+        })
 
-            # Override with risk_hint from parser if available
-            if risk_level_hint:
-                risk_level = risk_level_hint
-
-            summary = (
-                f"Suspicious network activity detected from {src_ip} to {dst_ip}. "
-                f"Domain involved: {domain_value}. "
-                f"Alert type: {alert_type}. "
-                f"Reasons: {'; '.join(reasons)}. "
-                f"Recommended action: {recommended_action}."
-            )
-
-            suspicious.append(
-                {
-                    "timestamp": timestamp,
-                    "source_ip": src_ip,
-                    "destination_ip": dst_ip,
-                    "domain": domain_value,
-                    "alert_type": alert_type,
-                    "summary": summary,
-                    "risk_level": risk_level,
-                    "recommended_action": recommended_action,
-                    "status": "Pending",
-                }
-            )
-
-    return suspicious
+    return results

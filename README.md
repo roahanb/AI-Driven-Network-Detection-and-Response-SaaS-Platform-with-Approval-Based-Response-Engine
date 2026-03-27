@@ -1,8 +1,19 @@
-# AI-NDR — AI-Driven Network Detection and Response Platform
+# AI-Driven Network Detection and Response Platform for Real-Time Intrusion Detection
 
-A production-ready, multi-tenant Network Detection and Response (NDR) SaaS platform built on a hybrid ML ensemble stack (BiLSTM + XGBoost + Isolation Forest + One-Class SVM), MITRE ATT&CK mapping, real-time WebSocket streaming, and a 3-tier human-in-the-loop approval workflow (ABRE).
+A production-ready, multi-tenant NDR SaaS platform with live Suricata packet capture, hybrid ML ensemble (BiLSTM + XGBoost + Isolation Forest), MITRE ATT&CK mapping, real-time WebSocket streaming, and fully automated risk triage — no manual intervention required.
 
 **Live at:** [roahacks.com](https://roahacks.com)
+
+---
+
+## What It Does
+
+- Monitors your network interface in real time via **Suricata EVE JSON** stream
+- Automatically classifies every event (DNS lookups, TLS connections, anomalies) using an ML ensemble
+- Suppresses background noise (local-to-local UDP keep-alives, mDNS, ARP) — only meaningful events surface
+- Medium and High risk incidents appear on the dashboard instantly via WebSocket push
+- Low risk traffic is silently logged in the background
+- No manual log uploads required — fully automatic
 
 ---
 
@@ -26,20 +37,19 @@ A production-ready, multi-tenant Network Detection and Response (NDR) SaaS platf
 | Layer | Technology |
 |---|---|
 | Backend API | FastAPI (Python 3.11) |
+| Live Capture | Suricata 8.x — EVE JSON stream on `en0` |
 | ML — Sequence Model | BiLSTM (2×128 units, dropout 0.3, seq_len=20) — TensorFlow/Keras |
 | ML — Anomaly Detection | Isolation Forest + One-Class SVM — scikit-learn |
 | ML — Ensemble | XGBoost meta-classifier (fuses all model outputs) |
 | Feature Engineering | 78-dimensional CICIDS2018 feature vectors, robust z-score normalization |
 | Training Data | Synthetic CICIDS2018 + UNSW-NB15 (60,000 samples, 12 attack classes) |
 | Authentication | JWT (HS256) + bcrypt |
-| Database | PostgreSQL 16 (SQLAlchemy ORM) |
-| Cache / Queue | Redis 7 |
-| Real-time | WebSocket (per-org broadcast) |
+| Database | SQLite (dev) / PostgreSQL 16 (prod) via SQLAlchemy ORM |
+| Real-time | WebSocket (`uvicorn[standard]`) per-org broadcast |
 | Frontend | React 18, Axios |
 | Container | Docker + Docker Compose |
-| Proxy | Nginx (reverse proxy + SSL termination) |
 | Threat Framework | MITRE ATT&CK (14 tactics, 17+ techniques) |
-| Log Formats | Zeek TSV, Suricata EVE JSON, CSV, plain text |
+| Log Formats | Suricata EVE JSON (live), Zeek TSV, CSV, plain text |
 
 ---
 
@@ -48,7 +58,13 @@ A production-ready, multi-tenant Network Detection and Response (NDR) SaaS platf
 ### Ensemble Stack (Section 4.2 — Research Paper)
 
 ```
-Network Flow
+Network Interface (en0)
+     │
+     ▼
+Suricata (EVE JSON stream)
+     │
+     ▼
+NDR Watcher (ndr_watcher.py) — noise filter + event batching
      │
      ▼
 Feature Engineering (78 features — CICIDS2018 standard)
@@ -62,13 +78,15 @@ Feature Engineering (78 features — CICIDS2018 standard)
 ### 12 Attack Categories (CICIDS2018)
 `Benign` · `DoS-Hulk` · `PortScan` · `DDoS` · `DoS-GoldenEye` · `FTP-Patator` · `SSH-Patator` · `Bot` · `Web-BruteForce` · `Infiltration` · `Heartbleed` · `Ransomware`
 
-### ABRE — 3-Tier Approval Engine (Section 4.3 — Research Paper)
+### Automated Risk Tiers
 
-| Tier | Risk Level | Threat Score | Action |
+| Tier | Risk Level | Threat Score | Auto Action |
 |---|---|---|---|
-| Tier 1 | Low | < 0.4 | Auto-execute response |
-| Tier 2 | Medium | 0.4 – 0.75 | Analyst approval required |
-| Tier 3 | High | > 0.75 | Manager approval required |
+| Tier 1 | Low | < 0.4 | Silently logged (background) |
+| Tier 2 | Medium | 0.4 – 0.75 | Shown on dashboard (Monitoring) |
+| Tier 3 | High | > 0.75 | Highlighted alert on dashboard (Active) |
+
+No manual approval required — all triage is automated.
 
 ---
 
@@ -76,28 +94,31 @@ Feature Engineering (78 features — CICIDS2018 standard)
 
 - Organization-isolated data — every query filtered by `organization_id`
 - Role-based access control: `ADMIN` → `ANALYST` → `VIEWER`
-- JWT access tokens (30 min) + refresh tokens (7 days)
+- JWT access tokens with long-lived watcher service tokens
 - First user per organization auto-assigned ADMIN
 
 ---
 
 ## Real-Time Operations
 
-- WebSocket endpoint (`/ws?token=<JWT>`) for live incident streaming
+- WebSocket endpoint (`/ws?token=<JWT>`) — requires `uvicorn[standard]`
 - Per-organization broadcast isolation
 - Frontend auto-reconnects on disconnect
-- Toast notifications on every new incident
+- Incidents appear on dashboard without page refresh
+- Start/Stop watcher directly from the dashboard UI
 
 ---
 
-## Dashboard
+## Dashboard Features
 
-- Live connection status indicator (green / yellow / red)
-- MITRE ATT&CK heatmap (14 tactics, color-coded by threat count)
-- Incident timeline chart (last 10 days)
-- Search + filter by risk level / status / attack category
-- One-click Approve / Reject with role enforcement
-- Per-incident: attack category, threat score, ABRE tier, AI reason
+- **Live status indicator** — green (Live) / yellow (Connecting) / red (Disconnected)
+- **Start / Stop watcher** — controls Suricata NDR watcher process from the UI
+- **Smart noise filtering** — suppresses local↔local UDP/mDNS background traffic
+- **User-friendly incident titles** — "DNS Lookup: youtube.com", "Secure Connection: api.github.com"
+- **MITRE ATT&CK heatmap** — 14 tactics, color-coded by threat count
+- **Incident timeline chart** — last 10 days
+- **Search + filter** — by risk level / status / domain / IP
+- **Download Today's Report** — exports a sorted plaintext network activity report
 
 ---
 
@@ -106,47 +127,46 @@ Feature Engineering (78 features — CICIDS2018 standard)
 ```
 Browser
   │
-  └── Nginx (port 80/443)
-        ├── /            → React SPA (static)
-        ├── /api/*       → FastAPI backend (proxy)
-        ├── /upload-logs → FastAPI backend (proxy, 50 MB limit)
-        ├── /incidents   → FastAPI backend (proxy)
-        └── /ws          → FastAPI WebSocket (proxy, keep-alive)
+  └── React SPA (localhost:3000 dev / Nginx prod)
+        │
+        └── FastAPI backend (localhost:8000)
+              ├── Auth         /api/v1/auth/register, /login
+              ├── Incidents    /incidents  (GET, DELETE all)
+              ├── Watcher      /watcher/start, /watcher/stop, /watcher/status
+              ├── WebSocket    /ws?token=<JWT>
+              ├── Health       /health
+              └── Metrics      /metrics
 
-FastAPI
-  ├── Auth endpoints  (/api/v1/auth/register, /login)
-  ├── Upload endpoint (/upload-logs)
-  │     ├── Zeek / Suricata / CSV / text parser
-  │     ├── 78-feature extraction (CICIDS2018)
-  │     ├── Ensemble inference (BiLSTM + XGBoost + IF + OC-SVM)
-  │     ├── ABRE risk tier assignment
-  │     └── MITRE ATT&CK mapping
-  ├── Incidents CRUD  (/incidents, approve, reject)
-  ├── WebSocket       (/ws)
-  └── Metrics         (/metrics)
-
-PostgreSQL  →  Organization, User, Incident tables
-Redis       →  Session cache, rate limiting
+Suricata (en0)
+  └── eve.json → NDR Watcher → POST /upload-logs → ML ensemble → Incident stored → WS broadcast
 ```
 
 ---
 
 ## Running Locally
 
-**Prerequisites:** Docker + Docker Compose
+**Prerequisites:** Python 3.11+, Node 18+, Suricata 8+
 
 ```bash
 git clone https://github.com/roahanb/AI-Driven-Network-Detection-and-Response-SaaS-Platform-with-Approval-Based-Response-Engine.git
 cd AI-Driven-Network-Detection-and-Response-SaaS-Platform-with-Approval-Based-Response-Engine
 
-cp backend/.env.example backend/.env
-# Edit backend/.env — set SECRET_KEY and DATABASE_URL
+# Backend
+cd backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+pip install 'uvicorn[standard]' websockets
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-docker compose up -d --build
-# Models train automatically during build (~3 min)
+# Frontend (new terminal)
+cd frontend && npm install && npm start
+
+# Suricata (macOS)
+brew install suricata
+sudo suricata -c /opt/homebrew/etc/suricata/suricata.yaml -i en0 -D
 ```
 
-Open **http://localhost:3000** — register an account and upload a log file.
+Open **http://localhost:3000** → register → click **▶ Start** to begin live monitoring.
 
 ---
 
@@ -156,12 +176,14 @@ Open **http://localhost:3000** — register an account and upload a log file.
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | ✗ | Register user + org |
 | POST | `/api/v1/auth/login` | ✗ | Login, returns JWT |
-| POST | `/upload-logs` | ✓ | Upload + analyze log file |
+| POST | `/upload-logs` | ✓ | Ingest Suricata events (used by watcher) |
 | GET | `/incidents` | ✓ | List org incidents |
-| PUT | `/incidents/{id}/approve` | ✓ ANALYST+ | Approve incident |
-| PUT | `/incidents/{id}/reject` | ✓ ANALYST+ | Reject incident |
+| DELETE | `/incidents` | ✓ ADMIN | Delete all incidents |
+| POST | `/watcher/start` | ✓ ADMIN | Start NDR watcher subprocess |
+| POST | `/watcher/stop` | ✓ ADMIN | Stop NDR watcher subprocess |
+| GET | `/watcher/status` | ✓ | Watcher running state + uptime |
 | GET | `/metrics` | ✓ | Platform counters |
-| WS | `/ws?token=<JWT>` | ✓ | Real-time event stream |
+| WS | `/ws?token=<JWT>` | ✓ | Real-time incident stream |
 | GET | `/health` | ✗ | Health check |
 
 ---

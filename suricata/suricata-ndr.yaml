@@ -1,0 +1,361 @@
+%YAML 1.1
+---
+# Suricata config for AI-NDR Platform
+# Auto-generated for macOS / en0 (Wi-Fi)
+
+vars:
+  address-groups:
+    HOME_NET: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+
+default-log-dir: /Users/roahan/ai-ndr-platform/suricata/logs/
+
+stats:
+  enabled: yes
+  interval: 8
+
+outputs:
+  # EVE JSON — this is what the NDR watcher reads
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      pcap-file: false
+      community-id: true
+      community-id-seed: 0
+      types:
+        - alert:
+            payload: yes
+            payload-buffer-size: 4kb
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+            http-body: yes
+            http-body-printable: yes
+            tagged-packets: yes
+        - anomaly:
+            enabled: yes
+            types:
+              decode: yes
+              stream: yes
+              applayer: yes
+        - http:
+            extended: yes
+        - dns:
+            query: yes
+            answer: yes
+        - tls:
+            extended: yes
+        - files:
+            force-magic: no
+        - smtp: {}
+        - dnp3: {}
+        - ftp: {}
+        - rdp: {}
+        - nfs: {}
+        - smb: {}
+        - tftp: {}
+        - ikev2: {}
+        - krb5: {}
+        - dhcp:
+            enabled: yes
+            extended: yes
+        - ssh: {}
+        - flow: {}
+        - netflow: {}
+
+  - fast:
+      enabled: yes
+      filename: fast.log
+      append: yes
+
+  - stats:
+      enabled: yes
+      filename: stats.log
+      totals: yes
+      threads: no
+      null-values: no
+
+af-packet:
+  - interface: default  # overridden by start script with active iface
+
+pcap:
+  - interface: default
+
+app-layer:
+  protocols:
+    krb5:
+      enabled: yes
+    snmp:
+      enabled: yes
+    ikev2:
+      enabled: yes
+    tls:
+      enabled: yes
+      detection-ports:
+        dp: 443
+    dcerpc:
+      enabled: yes
+    ftp:
+      enabled: yes
+      memcap: 64mb
+    ssh:
+      enabled: yes
+    smtp:
+      enabled: yes
+      raw-extraction: no
+      mime:
+        decode-mime: yes
+        decode-base64: yes
+        decode-quoted-printable: yes
+        header-value-depth: 2000
+        extract-urls: yes
+        body-md5: no
+      inspected-tracker:
+        content-limit: 100755
+        content-inspect-min-size: 32768
+        content-inspect-window: 4096
+    imap:
+      enabled: detection-only
+    dns:
+      tcp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+      udp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+    http:
+      enabled: yes
+      libhtp:
+        default-config:
+          personality: IDS
+          request-body-limit: 100kb
+          response-body-limit: 100kb
+          request-body-minimal-inspect-size: 32kb
+          request-body-inspect-window: 4kb
+          response-body-minimal-inspect-size: 40kb
+          response-body-inspect-window: 16kb
+          response-body-decompress-layer-limit: 2
+          http-body-inline: auto
+          swf-decompression:
+            enabled: yes
+            type: both
+            compress-depth: 100kb
+            decompress-depth: 100kb
+          double-decode-path: no
+          double-decode-query: no
+
+asn1-max-frames: 256
+
+coredump:
+  max-dump: unlimited
+
+host-os-policy:
+  windows: [0.0.0.0/0]
+  bsd: []
+  bsd-right: []
+  old-linux: []
+  linux: []
+  old-solaris: []
+  solaris: []
+  hpux10: []
+  hpux11: []
+  irix: []
+  macos: []
+  vista: []
+  windows2k3: []
+
+defrag:
+  memcap: 32mb
+  hash-size: 65536
+  trackers: 65535
+  max-frags: 65535
+  prealloc: yes
+  timeout: 60
+
+flow:
+  memcap: 128mb
+  hash-size: 65536
+  prealloc: 10000
+  emergency-recovery: 30
+
+vlan:
+  use-for-tracking: true
+
+flow-timeouts:
+  default:
+    new: 30
+    established: 300
+    closed: 0
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-closed: 0
+    emergency-bypassed: 50
+  tcp:
+    new: 60
+    established: 600
+    closed: 60
+    bypassed: 100
+    emergency-new: 5
+    emergency-established: 100
+    emergency-closed: 10
+    emergency-bypassed: 50
+  udp:
+    new: 30
+    established: 300
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-bypassed: 50
+  icmp:
+    new: 30
+    established: 300
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-bypassed: 50
+
+stream:
+  memcap: 64mb
+  checksum-validation: yes
+  inline: auto
+  reassembly:
+    memcap: 256mb
+    depth: 1mb
+    toserver-chunk-size: 2560
+    toclient-chunk-size: 2560
+    randomize-chunk-size: yes
+
+host:
+  hash-size: 4096
+  prealloc: 1000
+  memcap: 32mb
+
+decoder:
+  teredo:
+    enabled: true
+  vxlan:
+    enabled: true
+  vntag:
+    enabled: false
+
+detect:
+  profile: medium
+  custom-values:
+    toclient-groups: 3
+    toserver-groups: 25
+  sgh-mpm-context: auto
+  inspection-recursion-limit: 3000
+  prefilter:
+    default: mpm
+  grouping: {}
+  profiling:
+    grouping:
+      dump-to-disk: false
+      include-rules: false
+      json: true
+
+mpm-algo: auto
+spm-algo: auto
+
+threading:
+  set-cpu-affinity: no
+  cpu-affinity:
+    - management-cpu-set:
+        cpu: [ 0 ]
+    - receive-cpu-set:
+        cpu: [ 0 ]
+    - worker-cpu-set:
+        cpu: [ "all" ]
+        mode: "balanced"
+        prio:
+          low: [ 0 ]
+          medium: [ "1-2" ]
+          high: [ 3 ]
+          default: "medium"
+  detect-thread-ratio: 1.0
+
+luajit:
+  states: 128
+
+profiling:
+  rules:
+    enabled: yes
+    filename: rule_perf.log
+    append: yes
+    limit: 10
+    json: yes
+  keywords:
+    enabled: yes
+    filename: keyword_perf.log
+    append: yes
+  rulegroups:
+    enabled: yes
+    filename: rule_group_perf.log
+    append: yes
+  packets:
+    enabled: yes
+    filename: packet_stats.log
+    append: yes
+    csv:
+      enabled: no
+      filename: packet_stats.csv
+  locks:
+    enabled: no
+    filename: lock_stats.log
+    append: yes
+  pcap-log:
+    enabled: no
+    filename: pcaplog_stats.log
+    append: yes
+
+nfq: {}
+
+nflog:
+  - group: 2
+    buffer-size: 18432
+  - group: default
+    qthreshold: 1
+    qtimeout: 100
+    max-size: 20000
+
+capture:
+  disable-offloading: true
+
+# Rules — using Suricata ET Open rules
+default-rule-path: /opt/homebrew/var/lib/suricata/rules
+
+rule-files:
+  - "*.rules"
+
+classification-file: /opt/homebrew/etc/suricata/classification.config
+reference-config-file: /opt/homebrew/etc/suricata/reference.config
+threshold-file: /opt/homebrew/etc/suricata/threshold.config
