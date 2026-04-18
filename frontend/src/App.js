@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import "./App.css";
+import AICompanion from "./AICompanion";
+import XDRWorkbench from "./XDRWorkbench";
 
 // Dev (npm start) → hit backend directly
 // Docker / Production (nginx) → relative URL, nginx proxies to backend
@@ -733,7 +735,7 @@ function DashboardPage({ user, onLogout, toast }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 24, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-        {[["incidents", "Incidents"], ["heatmap", "MITRE Heatmap"], ["analytics", "Analytics"]].map(([key, label]) => (
+        {[["workbench", "XDR Workbench"], ["incidents", "Incidents"], ["heatmap", "MITRE Heatmap"], ["analytics", "Analytics"]].map(([key, label]) => (
           <button key={key} onClick={() => setActiveTab(key)} style={{
             background: "none", border: "none",
             color: activeTab === key ? "white" : "rgba(255,255,255,0.45)",
@@ -747,6 +749,7 @@ function DashboardPage({ user, onLogout, toast }) {
         ))}
       </div>
 
+      {activeTab === "workbench" && <XDRWorkbench />}
       {activeTab === "heatmap" && <MitreHeatmap incidents={incidents} />}
       {activeTab === "analytics" && <RiskTimeline incidents={incidents} />}
 
@@ -956,6 +959,7 @@ function App() {
         ? <DashboardPage user={user} onLogout={handleLogout} toast={addToast} />
         : <LoginPage onLoginSuccess={handleLoginSuccess} toast={addToast} />
       }
+      {isAuthenticated && <AICompanion />}
     </>
   );
 }

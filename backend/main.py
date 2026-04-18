@@ -22,6 +22,8 @@ from security import TokenData, verify_token
 from websocket_manager import manager as ws_manager
 from logging_config import setup_logging
 from metrics import metrics
+from ai_companion import router as ai_companion_router
+from xdr_workbench import router as xdr_workbench_router
 
 # Setup structured logging
 logger = setup_logging(logging.INFO)
@@ -42,6 +44,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register AI Companion + XDR Workbench routers
+app.include_router(ai_companion_router)
+app.include_router(xdr_workbench_router)
 
 
 def get_db():
